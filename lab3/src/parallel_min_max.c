@@ -5,11 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-
+#include <fcntl.h>
 #include <getopt.h>
 
 #include "find_min_max.h"
@@ -40,24 +39,30 @@ int main(int argc, char **argv) {
         switch (option_index) {
           case 0:
             seed = atoi(optarg);
-            // your code here
-            // error handling
+            if (seed <= 0) {
+                printf("seed must be a positive number\n");
+                return 1;
+            }
             break;
           case 1:
             array_size = atoi(optarg);
-            // your code here
-            // error handling
+            if (array_size <= 0) {
+                printf("array_size must be a positive number\n");
+                return 1;
+            }
             break;
           case 2:
             pnum = atoi(optarg);
-            // your code here
-            // error handling
+            if (pnum <= 0) {
+                printf("pnum must be a positive number\n");
+                return 1;
+            }
             break;
           case 3:
             with_files = true;
             break;
 
-          defalut:
+          default:
             printf("Index %d is out of options\n", option_index);
         }
         break;
@@ -88,9 +93,31 @@ int main(int argc, char **argv) {
   GenerateArray(array, array_size, seed);
   int active_child_processes = 0;
 
+  // Создаем pipes или файлы для каждого процесса
+  int pipes[pnum][2];
+  char filenames[pnum][100];
+  
+  if (!with_files) {
+    // Создаем pipes для всех процессов
+    for (int i = 0; i < pnum; i++) {
+      if (pipe(pipes[i]) == -1) {
+        printf("Pipe creation failed!\n");
+        return 1;
+      }
+    }
+  } else {
+    // Генерируем имена файлов
+    for (int i = 0; i < pnum; i++) {
+      sprintf(filenames[i], "min_max_result_%d.txt", i);
+      // Удаляем файлы если они существуют
+      unlink(filenames[i]);
+    }
+  }
+
   struct timeval start_time;
   gettimeofday(&start_time, NULL);
 
+  // Создаем процессы
   for (int i = 0; i < pnum; i++) {
     pid_t child_pid = fork();
     if (child_pid >= 0) {
@@ -98,14 +125,30 @@ int main(int argc, char **argv) {
       active_child_processes += 1;
       if (child_pid == 0) {
         // child process
-
-        // parallel somehow
-
+        
+        // Вычисляем границы для этого процесса
+        int chunk_size = array_size / pnum;
+        int start = i * chunk_size;
+        int end = (i == pnum - 1) ? array_size : (i + 1) * chunk_size;
+        
+        // Ищем min/max в своей части массива
+        struct MinMax local_min_max = GetMinMax(array, start, end);
+        
         if (with_files) {
           // use files here
+          FILE* file = fopen(filenames[i], "w");
+          if (file != NULL) {
+            fprintf(file, "%d %d", local_min_max.min, local_min_max.max);
+            fclose(file);
+          }
         } else {
           // use pipe here
+          close(pipes[i][0]); // закрываем чтение в потомке
+          write(pipes[i][1], &local_min_max.min, sizeof(local_min_max.min));
+          write(pipes[i][1], &local_min_max.max, sizeof(local_min_max.max));
+          close(pipes[i][1]);
         }
+        free(array);
         return 0;
       }
 
@@ -115,9 +158,9 @@ int main(int argc, char **argv) {
     }
   }
 
+  // Родительский процесс ждет всех потомков и собирает результаты
   while (active_child_processes > 0) {
-    // your code here
-
+    wait(NULL);
     active_child_processes -= 1;
   }
 
@@ -125,14 +168,26 @@ int main(int argc, char **argv) {
   min_max.min = INT_MAX;
   min_max.max = INT_MIN;
 
+  // Собираем результаты от всех процессов
   for (int i = 0; i < pnum; i++) {
     int min = INT_MAX;
     int max = INT_MIN;
 
     if (with_files) {
       // read from files
+      FILE* file = fopen(filenames[i], "r");
+      if (file != NULL) {
+        fscanf(file, "%d %d", &min, &max);
+        fclose(file);
+        // Удаляем временный файл
+        unlink(filenames[i]);
+      }
     } else {
       // read from pipes
+      close(pipes[i][1]); // закрываем запись в родителе
+      read(pipes[i][0], &min, sizeof(min));
+      read(pipes[i][0], &max, sizeof(max));
+      close(pipes[i][0]);
     }
 
     if (min < min_max.min) min_max.min = min;
@@ -150,6 +205,7 @@ int main(int argc, char **argv) {
   printf("Min: %d\n", min_max.min);
   printf("Max: %d\n", min_max.max);
   printf("Elapsed time: %fms\n", elapsed_time);
+  printf("Used method: %s\n", with_files ? "files" : "pipes");
   fflush(NULL);
   return 0;
 }
