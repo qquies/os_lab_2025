@@ -1,0 +1,22 @@
+# Компилируемые файлы
+*.exe
+*.out
+*.o
+*.a
+*.so
+*.dylib
+
+# Отладочные файлы
+*.dSYM/
+debug/
+release/
+
+# Профилирование
+gmon.out
+*.gcda
+*.gcno
+*.gcov
+
+# Автогенерируемые
+config.h
+config.log
