@@ -1,0 +1,8 @@
+# Сборка программы
+make
+
+# Запуск с тестовыми параметрами
+./parallel_sum --threads_num 4 --seed 123 --array_size 1000000
+
+# Или через make test
+make test

@@ -1,0 +1,277 @@
+=== POSIX THREADS (PTHREADS) - РУКОВОДСТВО ===
+
+=== КАК СОЗДАВАТЬ ПОТОКИ ===
+
+ФУНКЦИЯ: pthread_create()
+СИНТАКСИС:
+#include <pthread.h>
+int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
+                   void *(*start_routine)(void *), void *arg);
+
+ПАРАМЕТРЫ:
+- thread    - указатель на идентификатор потока
+- attr      - атрибуты потока (NULL для значений по умолчанию)
+- start_routine - функция, которая будет выполнена в потоке
+- arg       - аргумент для передачи в функцию
+
+ВОЗВРАЩАЕМОЕ ЗНАЧЕНИЕ:
+- 0 при успехе
+- код ошибки при неудаче
+
+ПРИМЕР СОЗДАНИЯ ПОТОКА:
+
+#include <stdio.h>
+#include <pthread.h>
+#include <unistd.h>
+
+// Функция, выполняемая в потоке
+void* thread_function(void* arg) {
+    int thread_id = *(int*)arg;
+    printf("Поток %d запущен\n", thread_id);
+    sleep(2);
+    printf("Поток %d завершен\n", thread_id);
+    return NULL;
+}
+
+int main() {
+    pthread_t thread1, thread2;
+    int id1 = 1, id2 = 2;
+    
+    // Создание первого потока
+    if (pthread_create(&thread1, NULL, thread_function, &id1) != 0) {
+        perror("Ошибка создания потока 1");
+        return 1;
+    }
+    
+    // Создание второго потока
+    if (pthread_create(&thread2, NULL, thread_function, &id2) != 0) {
+        perror("Ошибка создания потока 2");
+        return 1;
+    }
+    
+    // Ждем завершения потоков
+    pthread_join(thread1, NULL);
+    pthread_join(thread2, NULL);
+    
+    printf("Все потоки завершены\n");
+    return 0;
+}
+
+=== КАК ДОЖИДАТЬСЯ ЗАВЕРШЕНИЯ ПОТОКОВ ===
+
+ФУНКЦИЯ: pthread_join()
+СИНТАКСИС:
+#include <pthread.h>
+int pthread_join(pthread_t thread, void **retval);
+
+ПАРАМЕТРЫ:
+- thread - идентификатор потока, которого нужно ждать
+- retval  - указатель для сохранения возвращаемого значения (NULL если не нужно)
+
+ВОЗВРАЩАЕМОЕ ЗНАЧЕНИЕ:
+- 0 при успехе
+- код ошибки при неудаче
+
+ПРИМЕР С ВОЗВРАЩАЕМЫМ ЗНАЧЕНИЕМ:
+
+#include <stdio.h>
+#include <pthread.h>
+#include <stdlib.h>
+
+// Функция, возвращающая результат
+void* calculate_sum(void* arg) {
+    int* numbers = (int*)arg;
+    int count = numbers[0];
+    long long* result = malloc(sizeof(long long));
+    *result = 0;
+    
+    for (int i = 1; i <= count; i++) {
+        *result += numbers[i];
+    }
+    
+    return result;  // Возвращаем указатель на результат
+}
+
+int main() {
+    pthread_t thread;
+    int data[] = {5, 1, 2, 3, 4, 5};  // Первый элемент - количество чисел
+    
+    // Создаем поток
+    if (pthread_create(&thread, NULL, calculate_sum, data) != 0) {
+        perror("Ошибка создания потока");
+        return 1;
+    }
+    
+    // Ждем завершения и получаем результат
+    long long* result;
+    if (pthread_join(thread, (void**)&result) != 0) {
+        perror("Ошибка ожидания потока");
+        return 1;
+    }
+    
+    printf("Сумма: %lld\n", *result);
+    free(result);  // Освобождаем память, выделенную в потоке
+    
+    return 0;
+}
+
+=== ПРАКТИЧЕСКИЙ ПРИМЕР С НЕСКОЛЬКИМИ ПОТОКАМИ ===
+
+#include <stdio.h>
+#include <pthread.h>
+#include <stdlib.h>
+
+#define NUM_THREADS 4
+
+typedef struct {
+    int start;
+    int end;
+    long long partial_sum;
+} ThreadData;
+
+void* partial_sum(void* arg) {
+    ThreadData* data = (ThreadData*)arg;
+    data->partial_sum = 0;
+    
+    for (int i = data->start; i < data->end; i++) {
+        data->partial_sum += i;
+    }
+    
+    return NULL;
+}
+
+int main() {
+    pthread_t threads[NUM_THREADS];
+    ThreadData thread_data[NUM_THREADS];
+    int range = 1000000;
+    int chunk_size = range / NUM_THREADS;
+    
+    // Создаем потоки
+    for (int i = 0; i < NUM_THREADS; i++) {
+        thread_data[i].start = i * chunk_size;
+        thread_data[i].end = (i == NUM_THREADS - 1) ? range : (i + 1) * chunk_size;
+        
+        if (pthread_create(&threads[i], NULL, partial_sum, &thread_data[i]) != 0) {
+            perror("Ошибка создания потока");
+            return 1;
+        }
+    }
+    
+    // Ждем завершения всех потоков и суммируем результаты
+    long long total_sum = 0;
+    for (int i = 0; i < NUM_THREADS; i++) {
+        if (pthread_join(threads[i], NULL) != 0) {
+            perror("Ошибка ожидания потока");
+            return 1;
+        }
+        total_sum += thread_data[i].partial_sum;
+    }
+    
+    printf("Общая сумма: %lld\n", total_sum);
+    return 0;
+}
+
+=== КАК ЛИНКОВАТЬСЯ НА БИБЛИОТЕКУ PTHREAD ===
+
+СПОСОБ 1: КОМПИЛЯЦИЯ С ФЛАГОМ -pthread (РЕКОМЕНДУЕТСЯ)
+
+# Компиляция и линковка в один шаг
+gcc -pthread program.c -o program
+
+# Или раздельно
+gcc -c -pthread program.c
+gcc -pthread program.o -o program
+
+СПОСОБ 2: ЯВНОЕ УКАЗАНИЕ БИБЛИОТЕКИ
+
+# Компиляция
+gcc -c program.c
+
+# Линковка с библиотекой pthread
+gcc program.o -lpthread -o program
+
+СПОСОБ 3: В MAKEFILE
+
+CC = gcc
+CFLAGS = -Wall -Wextra -std=c99 -pthread
+LDFLAGS = -pthread
+
+program: program.o
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+program.o: program.c
+	$(CC) $(CFLAGS) -c program.c
+
+ПРОВЕРКА КОМПИЛЯЦИИ:
+
+#include <stdio.h>
+#include <pthread.h>
+
+int main() {
+    // Простая проверка, что pthread доступна
+    printf("Pthread доступна!\n");
+    
+    #ifdef _POSIX_THREADS
+    printf("POSIX threads поддерживаются\n");
+    #endif
+    
+    return 0;
+}
+
+=== ЧАСТО ВСТРЕЧАЮЩИЕСЯ ОШИБКИ И ИХ РЕШЕНИЕ ===
+
+ОШИБКА 1: Неопределенная ссылка на pthread_create
+РЕШЕНИЕ: Добавить -pthread при компиляции/линковке
+
+ОШИБКА 2: Поток не завершается
+РЕШЕНИЕ: Убедитесь, что вызываете pthread_join для всех потоков
+
+ОШИБКА 3: Race condition (состояние гонки)
+РЕШИНИЕ: Используйте мьютексы для синхронизации доступа к общим данным
+
+ПРИМЕР С МЬЮТЕКСОМ:
+
+#include <pthread.h>
+
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+int shared_counter = 0;
+
+void* increment_counter(void* arg) {
+    for (int i = 0; i < 1000; i++) {
+        pthread_mutex_lock(&mutex);
+        shared_counter++;
+        pthread_mutex_unlock(&mutex);
+    }
+    return NULL;
+}
+
+=== ОСНОВНЫЕ ФУНКЦИИ PTHREAD ===
+
+1. СОЗДАНИЕ И УПРАВЛЕНИЕ:
+   - pthread_create() - создание потока
+   - pthread_join()   - ожидание завершения потока
+   - pthread_detach() - отсоединение потока
+   - pthread_exit()   - завершение потока
+
+2. СИНХРОНИЗАЦИЯ:
+   - pthread_mutex_init()    - инициализация мьютекса
+   - pthread_mutex_lock()    - блокировка мьютекса
+   - pthread_mutex_unlock()  - разблокировка мьютекса
+   - pthread_cond_wait()     - ожидание условной переменной
+   - pthread_cond_signal()   - сигнал условной переменной
+
+3. АТРИБУТЫ:
+   - pthread_attr_init()     - инициализация атрибутов
+   - pthread_attr_destroy()  - уничтожение атрибутов
+
+=== ПОЛЕЗНЫЕ КОМАНДЫ ДЛЯ ОТЛАДКИ ===
+
+# Просмотр потоков процесса
+ps -T -p PID
+
+# Отладочная информация о потоках
+gdb -p PID
+info threads
+
+# Компиляция с отладочной информацией
+gcc -g -pthread program.c -o program
