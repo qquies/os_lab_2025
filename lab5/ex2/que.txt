@@ -1,0 +1,134 @@
+=== POSIX THREADS: СОЗДАНИЕ И ОЖИДАНИЕ ===
+
+СОЗДАНИЕ ПОТОКА:
+pthread_t thread;  // идентификатор потока
+int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
+                   void *(*start_routine)(void *), void *arg);
+
+Параметры:
+- thread - указатель на идентификатор потока
+- attr   - атрибуты потока (NULL = по умолчанию)
+- start_routine - функция для выполнения в потоке
+- arg    - аргумент для функции
+
+Пример:
+void* worker(void* arg) {
+    int id = *(int*)arg;
+    printf("Thread %d working\n", id);
+    return NULL;
+}
+
+int main() {
+    pthread_t thread;
+    int id = 1;
+    pthread_create(&thread, NULL, worker, &id);
+}
+
+ОЖИДАНИЕ ЗАВЕРШЕНИЯ:
+int pthread_join(pthread_t thread, void **retval);
+
+Параметры:
+- thread - идентификатор потока
+- retval - указатель для возвращаемого значения (NULL если не нужно)
+
+Пример:
+pthread_join(thread, NULL);  // ждем завершения
+
+ПОЛНЫЙ ПРИМЕР:
+#include <pthread.h>
+#include <stdio.h>
+
+void* task(void* arg) {
+    printf("Hello from thread!\n");
+    return NULL;
+}
+
+int main() {
+    pthread_t thread;
+    
+    // Создаем поток
+    if (pthread_create(&thread, NULL, task, NULL) != 0) {
+        perror("pthread_create failed");
+        return 1;
+    }
+    
+    // Ждем завершения
+    if (pthread_join(thread, NULL) != 0) {
+        perror("pthread_join failed");
+        return 1;
+    }
+    
+    return 0;
+}
+
+=== ЛИНКОВКА С PTHREAD ===
+
+СПОСОБ 1 (рекомендуется):
+gcc -pthread program.c -o program
+
+СПОСОБ 2:
+gcc program.c -lpthread -o program
+
+В MAKEFILE:
+CC = gcc
+CFLAGS = -Wall -pthread
+LDFLAGS = -pthread
+
+program: program.o
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+ПРОВЕРКА:
+#include <pthread.h>
+#ifdef _POSIX_THREADS
+    printf("POSIX threads supported\n");
+#endif
+
+=== МЬЮТЕКСЫ (MUTEX) ===
+
+ОБЪЯВЛЕНИЕ:
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
+ИЛИ динамическая инициализация:
+pthread_mutex_t mutex;
+pthread_mutex_init(&mutex, NULL);
+
+БЛОКИРОВКА:
+pthread_mutex_lock(&mutex);
+
+РАЗБЛОКИРОВКА:
+pthread_mutex_unlock(&mutex);
+
+УНИЧТОЖЕНИЕ:
+pthread_mutex_destroy(&mutex);
+
+ПРИМЕР С МЬЮТЕКСОМ:
+#include <pthread.h>
+
+int counter = 0;
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
+void* increment(void* arg) {
+    for (int i = 0; i < 1000; i++) {
+        pthread_mutex_lock(&mutex);  // блокируем
+        counter++;                   // критическая секция
+        pthread_mutex_unlock(&mutex);// разблокируем
+    }
+    return NULL;
+}
+
+ПРАВИЛА ИСПОЛЬЗОВАНИЯ МЬЮТЕКСОВ:
+
+1. Всегда разблокируйте мьютекс
+2. Не блокируйте надолго в критической секции
+3. Используйте для защиты общих данных
+4. Избегайте взаимных блокировок (deadlock)
+
+ОБЛАСТИ ПРИМЕНЕНИЯ:
+- Защита общих переменных
+- Синхронизация доступа к ресурсам
+- Обеспечение атомарности операций
+
+ЧАСТЫЕ ОШИБКИ:
+1. Забыли разблокировать мьютекс
+2. Блокировка в цикле без необходимости
+3. Взаимная блокировка нескольких мьютексов

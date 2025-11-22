@@ -1,0 +1,56 @@
+=== КОМПИЛЯЦИЯ GCC ===
+
+gcc file.c -o output      # Базовая компиляция
+gcc -Wall -std=c99 file.c # С предупреждениями
+gcc -c file.c            # Только компиляция
+gcc file.o -o program    # Только линковка
+
+=== СОСТОЯНИЕ ГОНКИ ===
+
+ПРОБЛЕМА: Несколько потоков обращаются к общим данным
+РЕЗУЛЬТАТ: Непредсказуемое поведение, потери данных
+ПРИЧИНА: Отсутствие синхронизации
+
+Пример:
+Поток 1: читает X=5
+Поток 2: читает X=5  
+Поток 1: X=6
+Поток 2: X=6  ← Должно быть 7!
+
+=== КРИТИЧЕСКАЯ СЕКЦИЯ ===
+
+ОПРЕДЕЛЕНИЕ: Часть кода, где обращаются к общим ресурсам
+РЕШЕНИЕ: Защита мьютексом
+
+Пример:
+pthread_mutex_lock(&mutex);
+// Критическая секция
+shared_variable++;
+pthread_mutex_unlock(&mutex);
+
+=== POSIX THREADS ===
+
+СОЗДАНИЕ:
+pthread_t thread;
+pthread_create(&thread, NULL, function, arg);
+
+ОЖИДАНИЕ:
+pthread_join(thread, NULL);
+
+Пример функции:
+void* thread_func(void* arg) {
+    // код потока
+    return NULL;
+}
+
+=== ЛИНКОВКА PTHREAD ===
+
+СПОСОБ 1 (рекомендуется):
+gcc -pthread program.c -o program
+
+СПОСОБ 2:
+gcc program.c -lpthread -o program
+
+В Makefile:
+CFLAGS = -pthread
+LDFLAGS = -pthread

@@ -1,0 +1,7 @@
+# Компиляция с поддержкой pthread
+gcc -pthread mutex.c -o mutex
+
+./mutex (без мьютекса)
+
+# С мьютексом (раскомментируйте строки с pthread_mutex_lock/unlock)
+
