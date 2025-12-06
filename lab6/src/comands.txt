@@ -1,0 +1,14 @@
+# Компиляция
+gcc -o client client.c -pthread -lm
+
+gcc -o server server.c -pthread -lm
+
+# Создание файла servers.txt
+cat > servers.txt << EOF
+127.0.0.1:20001
+127.0.0.1:20002
+127.0.0.1:20003
+EOF
+
+# Запуск клиента
+./client --k 100 --mod 1000000007 --servers servers.txt
